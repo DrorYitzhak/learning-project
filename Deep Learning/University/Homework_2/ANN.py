@@ -2,11 +2,14 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import sympy as sp
+from scipy.io import loadmat
+import pandas as pd
+
 
 
 class FeedForward_NN:
 
-    def __init__(self, z, number_neurons=70,  convergence=float(50e-3)):
+    def __init__(self, z, number_neurons=800,  convergence=float(10e-3)):
         self.y_size = z.shape[0]
         self.number_neurons = number_neurons
         self.weights_1 = np.array([np.squeeze(2 * np.random.rand(self.y_size, 1) - 1) for _ in range(number_neurons)])
@@ -21,7 +24,6 @@ class FeedForward_NN:
         self.observations_number = []
         self.y_pred = []
         self.accuracy_train = []
-
 
     def sigmoid(self, x):
         """
@@ -110,7 +112,6 @@ class FeedForward_NN:
     def train(self, x, z):
         observations = x.shape[1]
 
-
         j = 0
         while self.magnitude_combined_el >= self.convergence:
             magnitude_combined_el_cum = 0
@@ -118,16 +119,15 @@ class FeedForward_NN:
             while i < observations:
 
                 r_array, h_array = self.forward(x.T[i])
-                # print(h_array[0], h_array[1], h_array[2])
-                de_dw2, de_db2, de_dw1, de_db1 = self.backward(x.T[i], r_array, h_array)
+                de_dw2, de_db2, de_dw1, de_db1 = self.backward(z.T[i], r_array, h_array)
                 self.update_parameters(de_dw2, de_db2, de_dw1, de_db1)
-                magnitude_combined_el = self.calculate(r_array, x.T[i])
+                magnitude_combined_el = self.calculate(r_array, z.T[i])
                 i = i+1
                 self.observations_number = np.append(self.observations_number, i)
 
                 if self.magnitude_combined_el <= self.convergence and j > 1:
                 # if self.magnitude_combined_el <= self.convergence:
-                    self.compare_images(x.T[i], r_array, j, i)
+                    self.compare_images(z.T[i], r_array, j, i)
                     self.loss_graph()
                     break
                 # if i in [4000, 4001]:
@@ -214,5 +214,52 @@ class FeedForward_NN:
         time.sleep(2)
 
 
+if __name__ == "__main__":
+    # Define the path to the MAT file
+
+    file_path = r'C:\Users\drory\OneDrive - Mobileye\Desktop\תואר שני\למידה עמוקה\עבודות להגשה\תרגיל בית 3\images.mat'
+    file_path_noise = r'C:\Users\drory\OneDrive - Mobileye\Desktop\תואר שני\למידה עמוקה\עבודות להגשה\תרגיל בית 3\images_noise.mat'
+
+    # Load data from the MAT file
+    mat_data = loadmat(file_path)
+    df = pd.DataFrame(mat_data['observations'])
+
+    mat_data_noise = loadmat(file_path_noise)
+    df_noise = pd.DataFrame(mat_data_noise['observations_noise'])
 
 
+    # region Function to shuffle the dataframe
+    def shuffle_dataframe(dataframe, observations_to_train):
+        indices = list((dataframe.T).index)
+        # np.random.shuffle(indices)
+        shuffled_dataframe = (dataframe.T).iloc[indices].reset_index(drop=True)
+
+        train_data = np.array(shuffled_dataframe[0:int(len(shuffled_dataframe) * observations_to_train) - 1]).T
+        test_data = np.array(
+            shuffled_dataframe[int(len(shuffled_dataframe) * observations_to_train):len(shuffled_dataframe) - 1]).T
+
+        # x_train, x_test, y_train, y_test = train_test_split(x_train, y_train, test_size=0.2, random_state=42)
+
+        return train_data, test_data
+
+
+    # endregion
+
+    # region Shuffle and preprocess the data
+    observations_to_train = 1
+    train_data, test_data = shuffle_dataframe(df, observations_to_train)
+    train_data_noise, test_data_noise = shuffle_dataframe(df_noise, observations_to_train)
+    # endregion
+
+    neural_network = FeedForward_NN(train_data)
+
+    # region Train the model to
+    neural_network.train(train_data, train_data)
+    # endregion
+
+    # region Train the model filte noise
+    # neural_network.train(train_data_noise, train_data)
+    # endregion
+
+    # Plot the loss graph
+    # neural_network.loss_graph()

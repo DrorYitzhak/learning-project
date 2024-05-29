@@ -4,7 +4,7 @@ import sympy as sp
 
 class FeedForward_NN:
 
-    def __init__(self, z, number_neurons=11,  convergence=float(50e-3)):
+    def __init__(self, z, number_neurons=11,  convergence=float(10e-3)):
         self.y_size = z.shape[1]
         self.number_neurons = number_neurons
         # self.weights_1 = np.array([np.squeeze(2 * np.random.rand(2, 1) - 1) for _ in range(number_neurons)])
@@ -15,7 +15,7 @@ class FeedForward_NN:
         self.bias_1 = np.array([[6.56750687], [5.77719766], [2.83907154], [5.68911487], [-0.63042709], [6.6408539], [-10.68735794], [7.46841625], [5.05647139], [7.08529946], [6.12844616]])
         # self.bias_2 = np.outer(np.zeros(self.y_size), 1)
         self.bias_2 = np.array([[51.70452543], [51.56863749], [49.2323948]])
-        self.step = float(0.03)
+        self.step = float(0.01)
         self.convergence = convergence
         self.magnitude_combined_el = True
         self.magnitude_combined_el_for_graph = []
@@ -88,7 +88,7 @@ class FeedForward_NN:
         # de_db2_total_sum = np.sum(np.power(de_db2, 2), axis=None)
         # self.magnitude_combined_el = np.sqrt(de_dw1_total_sum + de_dw2_total_sum + de_db1_total_sum + de_db2_total_sum)
 
-        self.magnitude_combined_el_for_graph = np.append(self.magnitude_combined_el_for_graph, self.magnitude_combined_el)
+        # self.magnitude_combined_el_for_graph = np.append(self.magnitude_combined_el_for_graph, self.magnitude_combined_el)
 
     def train(self, x, z):
 
@@ -103,14 +103,18 @@ class FeedForward_NN:
                 #     break
 
                 i = i+1
-
+            self.magnitude_combined_el_for_graph = np.append(self.magnitude_combined_el_for_graph, self.magnitude_combined_el)
             j = j+1
+
             self.iterations = np.append(self.iterations, j)
             print(f'value magnitude_combined {self.magnitude_combined_el}, value magnitude_combined {self.convergence} ,iteration {j}')
-
+            if j == 600:
+                self.loss_graph()
+                pass
             # print(f'\rValue magnitude_combined: {self.magnitude_combined_el_el:.2f}\n', end='')
 
         print(j)
+
         return self.weights_1, self.weights_2, self.bias_1, self.bias_2
 
     # def train_criterion_accuracy(self, x, z):
