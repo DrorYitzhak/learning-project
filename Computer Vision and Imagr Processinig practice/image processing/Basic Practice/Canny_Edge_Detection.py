@@ -19,17 +19,17 @@ def display(img, title):
 
 
 
-# edges_canny = cv2.Canny(f, 200, 230)
-# display(edges_canny, "Canny Edge Detection 150, 200")
+edges_canny = cv2.Canny(f, 200, 230)
+display(edges_canny, "Canny Edge Detection 150, 200")
 
 edges_canny = cv2.Canny(f, 150, 200)
 display(edges_canny, "Canny Edge Detection 150, 200")
-#
-# edges_canny = cv2.Canny(f, 100, 150)
-# display(edges_canny, "Canny Edge Detection 100, 150")
-#
-# edges_canny = cv2.Canny(f, 50, 100)
-# display(edges_canny, "Canny Edge Detection 50, 100")
+
+edges_canny = cv2.Canny(f, 100, 150)
+display(edges_canny, "Canny Edge Detection 100, 150")
+
+edges_canny = cv2.Canny(f, 50, 100)
+display(edges_canny, "Canny Edge Detection 50, 100")
 
 
 

@@ -49,8 +49,8 @@ ret, thresholded_edge_x = cv2.threshold(add_edge, 70, 120, cv2.THRESH_BINARY)
 display(add_edge, "X+Y_Edge Detection")
 display(thresholded_edge_x, "Edge Detection")
 
-# edges_canny = cv2.Canny(f, 150, 200)
-# display(edges_canny, "Canny Edge Detection")
+edges_canny = cv2.Canny(f, 150, 200)
+display(edges_canny, "Canny Edge Detection")
 
 plt.show()
 print("o")

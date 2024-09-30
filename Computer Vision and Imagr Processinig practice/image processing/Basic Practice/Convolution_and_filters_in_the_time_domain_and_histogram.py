@@ -1,11 +1,11 @@
 import cv2
-from IPython.display import display, Image
+# from IPython.display import display, Image
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
 # Path to the image
-image_path = "C:\PycharmProjects\Image_2.jpg"
+image_path = "C:\PycharmProjects\phone.jpg"
 
 # Read the original image
 original_image = cv2.imread(image_path)
