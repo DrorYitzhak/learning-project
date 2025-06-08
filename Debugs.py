@@ -1,203 +1,169 @@
-import pandas as pd
+# Re-inject the full user code with English comments only, no code changes
 
-
-template = {
-    "DUT SN": "",
-    "Sys Type": "",
-    "Test Group": "",
-    "Test Name": "",
-    "Board SN": "",
-    "Chip Type": "",
-    "Chip Num": "",
-    "Channel": "",
-    "PA": "",
-    "Result": "",
-    "Units": "",
-    "Min Limit ATE": "",
-    "Max Limit ATE": "",
-    "Verdict ATE": "",
-    "LOM Freq Config[MHz]": "",
-    "RF Freq Config[MHz]": "",
-    "BB Freq Config[MHz]": "",
-    "Error Msg": "",
-    "DTS[C]": "",
-    "Iteration": "",
-    "Chip ATE SN": "",
-    "OTP ID": "",
-    "OTP Version": "",
-    "Digital Backoff": ""
-}
-
-
-df_combined = pd.DataFrame(columns=template.keys())
-
-def reverse_conversion(tx=None, rx=None):
+def full_json_validation(system_type, json_file_path):
     """
-    Conversion function from element to Chip, Channel in receiver and Chip, Channel, Pa in transmission.
+        Perform validation on a calibration JSON file for BSRC or BSR32 systems.
 
-    Parameters:
-        tx (int): Transmission element index.
-        rx (int): Receiver element index.
+        This function checks each calibration parameter in the JSON file and performs two types of validation:
+        1. **Zero-value index validation**: Certain predefined indices (per parameter) are expected to have a value of 0.
+           These are excluded from range validation but explicitly checked to be exactly zero.
+        2. **Range validation**: All other indices (not excluded) are validated to be within an allowed numerical range
+           defined per parameter.
 
-    Returns:
-        Tuple: (chip_tx, channel_tx, pa, chip_rx, channel_rx)
-        where chip_tx, channel_tx, pa are returned if tx is provided,
-        and chip_rx, channel_rx are returned if rx is provided.
-    """
-    tx_dict = {
-        0: [2, 3, 2], 1: [2, 3, 1], 2: [2, 2, 1], 3: [2, 2, 2], 4: [2, 1, 2],
-        5: [2, 1, 1], 6: [2, 0, 1], 7: [2, 0, 2], 8: [1, 3, 2], 9: [1, 3, 1],
-        10: [1, 2, 1], 11: [1, 2, 2], 12: [1, 1, 2], 13: [1, 1, 1], 14: [1, 0, 1],
-        15: [1, 0, 2], 16: [0, 3, 2], 17: [0, 3, 1], 18: [0, 2, 1],
-        19: [0, 2, 2], 20: [0, 1, 2], 21: [0, 1, 1], 22: [0, 0, 1], 23: [0, 0, 2],
-        24: [5, 3, 2], 25: [5, 3, 1], 26: [5, 2, 1], 27: [5, 2, 2],
-        28: [5, 1, 2], 29: [5, 1, 1], 30: [5, 0, 1], 31: [5, 0, 2], 32: [4, 3, 2],
-        33: [4, 3, 1], 34: [4, 2, 1], 35: [4, 2, 2], 36: [4, 1, 2],
-        37: [4, 1, 1], 38: [4, 0, 1], 39: [4, 0, 2], 40: [3, 3, 2], 41: [3, 3, 1],
-        42: [3, 2, 1], 43: [3, 2, 2], 44: [3, 1, 2], 45: [3, 1, 1],
-        46: [3, 0, 1], 47: [3, 0, 2]
+        Parameters:
+        ----------
+        system_type : str
+            Either 'bsrc' or 'bsr32'. Determines which set of rules to apply.
+        json_file_path : str
+            Full path to the calibration JSON file.
+
+        Returns:
+        -------
+        full_report : list of dict
+            A structured report of validation results per parameter.
+            Each item includes:
+                - test: The parameter name
+                - status: 'PASSED' or 'FAILED'
+                - excluded_index_errors: List of (index, value) where 0 was expected but not found
+                - range_errors: List of (index, value) that fell outside the valid range
+                - total_checked: Count of validated (non-excluded) indices
+                - total_failed: Total number of errors for this parameter
+        """
+    import json
+
+    # Load the JSON calibration file
+    with open(json_file_path, 'r') as f:
+        data = json.load(f)
+
+    # Predefined indices that should contain zero values for bsr32
+    excluded_indices_bsr32 = {
+        'd_rxbb_bw700_q2_2_i': [],
+        'd_rxbb_bw700_q2_1_i': [],
+        'd_rxbb_bw700_wo2_1_i': [],
+        'd_rxbb_bw700_wo1_i': [],
+        'rx_dig_lo_amp_bg_const_curr_tune': [0, 1, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24,
+                                             25, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 39, 40, 41, 42, 43, 45, 46, 47],
+        'rx_dig_bg_const_curr_tune': [],
+        'dig_rxbb_700_filt_ctrl': [],
+        'dig_rx_plpf_cbank_0v8': [],
+        'tx_dig_lo_amp_bg_const_curr_tune': [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dig_bg_const_curr_tune': [16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_aqi': [16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_aqq': [16, 17, 18, 19, 20, 21, 22, 23],
+        'rx_aqi': [],
+        'rx_aqq': [],
+        'tx_dc_i_a': [16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dc_q_a': [16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dc_i_b': [16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dc_q_b': [16, 17, 18, 19, 20, 21, 22, 23],
     }
 
-    rx_dict = {
-        0: [0, 5], 1: [0, 4], 2: [0, 3], 3: [0, 2], 4: [0, 1], 5: [0, 0],
-        6: [1, 5], 7: [1, 4], 8: [1, 3], 9: [1, 2], 10: [1, 1], 11: [1, 0],
-        12: [2, 5], 13: [2, 4], 14: [2, 3], 15: [2, 2], 16: [2, 1], 17: [2, 0],
-        18: [3, 5], 19: [3, 4], 20: [3, 3], 21: [3, 2], 22: [3, 1], 23: [3, 0],
-        24: [4, 5], 25: [4, 4], 26: [4, 3], 27: [4, 2], 28: [4, 1], 29: [4, 0],
-        30: [5, 5], 31: [5, 4], 32: [5, 3], 33: [5, 2], 34: [5, 1], 35: [5, 0],
-        36: [6, 5], 37: [6, 4], 38: [6, 3], 39: [6, 2], 40: [6, 1], 41: [6, 0],
-        42: [7, 5], 43: [7, 4], 44: [7, 3], 45: [7, 2], 46: [7, 1], 47: [7, 0]
+    # Allowed value ranges for bsr32
+    validation_ranges_bsr32 = {
+        'tx_aqi': (-500, 500),
+        'tx_aqq': (1500, 2500),
+        'rx_dig_lo_amp_bg_const_curr_tune': (5, 30),
+        'tx_dig_lo_amp_bg_const_curr_tune': (5, 30),
+        'tx_dig_bg_const_curr_tune': (5, 30),
+        'tx_dc_i_a': (-800, 1000),
+        'tx_dc_q_a': (-800, 1000),
+        'tx_dc_i_b': (-800, 1000),
+        'tx_dc_q_b': (-800, 1000),
+        'd_rxbb_bw700_q2_1_i': (3, 8),
+        'd_rxbb_bw700_q2_2_i': (3, 8),
+        'd_rxbb_bw700_wo1_i': (3, 8),
+        'd_rxbb_bw700_wo2_1_i': (3, 10),
+        'dig_rx_plpf_cbank_0v8': (15, 30),
+        'dig_rxbb_700_filt_ctrl': (5, 15),
+        'rx_aqi': (-500, 500),
+        'rx_aqq': (1500, 25000),
+        'rx_dig_bg_const_curr_tune': (5, 30),
     }
 
-    if tx is not None:
-        chip_tx, channel_tx, pa = tx_dict.get(tx, [None, None, None])
-        return chip_tx, channel_tx, pa, None, None
-    elif rx is not None:
-        chip_rx, channel_rx = rx_dict.get(rx, [None, None])
-        return None, None, None, chip_rx, channel_rx
-    return None, None, None, None, None
-def add_new_data(test_name, new_data, tx=None, rx=None):
-    """
-    Add new data to the combined DataFrame.
+    # Predefined indices for bsrc extracted from actual BSRC JSON
+    excluded_indices_bsrc = {
+        'd_rxbb_bw700_q2_2_i': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'd_rxbb_bw700_q2_1_i': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'd_rxbb_bw700_wo2_1_i': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'd_rxbb_bw700_wo1_i': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'rx_dig_lo_amp_bg_const_curr_tune': [0, 1, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26,
+                                             27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'rx_dig_bg_const_curr_tune': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'dig_rxbb_700_filt_ctrl': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'dig_rx_plpf_cbank_0v8': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'tx_dig_lo_amp_bg_const_curr_tune': [0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dig_bg_const_curr_tune': [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_aqi': [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_aqq': [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'rx_aqi': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'rx_aqq': [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+        'tx_dc_i_a': [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dc_q_a': [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dc_i_b': [6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        'tx_dc_q_b': [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+    }
 
-    Parameters:
-        new_data (list): New data to be added. Each element is used as a value for "Result".
-        tx (int or None): Transmission element index.
-        rx (int or None): Receiver element index.
-    """
-    global df_combined
+    # Allowed value ranges for bsrc
+    validation_ranges_bsrc = validation_ranges_bsr32
 
-    df_new = pd.DataFrame(new_data, columns=["Result"])
-
-    if tx:
-        chip_nums, channels, pas, _, _ = zip(*[reverse_conversion(tx=idx) for idx in range(len(new_data))])
-        chip_type = "Tx"
-    elif rx:
-        _, _, _, chip_nums, channels = zip(*[reverse_conversion(rx=idx) for idx in range(len(new_data))])
-        pas = [""] * len(new_data)
-        chip_type = "Rx"
+    # Choose the relevant rules based on the system type
+    if system_type == 'bsr32':
+        excluded_indices = excluded_indices_bsr32
+        validation_ranges = validation_ranges_bsr32
+    elif system_type == 'bsrc':
+        excluded_indices = excluded_indices_bsrc
+        validation_ranges = validation_ranges_bsrc
     else:
-        chip_nums = channels = pas = [""] * len(new_data)
-        chip_type = "TxRx"
+        raise ValueError("Invalid system_type. Must be 'bsr32' or 'bsrc'.")
 
+    full_report = []
 
-    df_new["DUT SN"] = ""
-    df_new["Sys Type"] = ""
-    df_new["Test Group"] = ""
-    df_new["Test Name"] = test_name
-    df_new["Board SN"] = ""
-    df_new["Chip Type"] = chip_type
-    df_new["Chip Num"] = chip_nums
-    df_new["Channel"] = channels
-    df_new["PA"] = pas
-    df_new["Units"] = ""
-    df_new["Min Limit ATE"] = ""
-    df_new["Max Limit ATE"] = ""
-    df_new["Verdict ATE"] = ""
-    df_new["LOM Freq Config[MHz]"] = ""
-    df_new["RF Freq Config[MHz]"] = ""
-    df_new["BB Freq Config[MHz]"] = ""
-    df_new["Error Msg"] = ""
-    df_new["DTS[C]"] = ""
-    df_new["Iteration"] = ""
-    df_new["Chip ATE SN"] = ""
-    df_new["OTP ID"] = ""
-    df_new["OTP Version"] = ""
-    df_new["Digital Backoff"] = ""
+    # Validate each parameter
+    for param, indices_to_exclude in excluded_indices.items():
+        values = data.get(param, [])
+        excluded_errors = []
+        included_values = []
 
-    df_new = df_new[list(template.keys())]
-    df_combined = pd.concat([df_combined, df_new], ignore_index=True)
+        for i, v in enumerate(values):
+            if i in indices_to_exclude:
+                if v != 0:
+                    excluded_errors.append((i, v))  # Should be 0 but it's not
+            else:
+                included_values.append((i, v))    # Should be in range
 
-    print(f"Data added to DataFrame: {df_combined.tail(len(new_data))}")
-    return df_combined
-def filter_and_update_data(df_combined, global_verdict, test_name, min_limit, max_limit):
-    """
-    Filter the 'Result' values based on the provided limits and update the DataFrame with verdicts.
+        range_errors = []
+        min_val, max_val = validation_ranges[param]
+        for i, v in included_values:
+            if not (min_val <= v <= max_val):
+                range_errors.append((i, v))       # Out of range
 
-    Parameters:
-        df_combined (pd.DataFrame): The DataFrame to filter and update.
-        global_verdict (int): The initial verdict value, which will be updated based on the results.
-        test_name (str): The name of the test to update.
-        min_limit (float): The minimum acceptable limit for the 'Result' values.
-        max_limit (float): The maximum acceptable limit for the 'Result' values.
-
-    Returns:
-        pd.DataFrame: The updated DataFrame.
-        int: The updated global verdict value.
-    """
-    # Find rows where 'Test Name' matches
-    mask = df_combined['Test Name'] == test_name
-    df_filtered = df_combined[mask]
-
-    # Check if there are any rows for the given test
-    if not df_filtered.empty:
-        # Update the 'Min Limit ATE' and 'Max Limit ATE' columns with the provided limits
-        df_combined.loc[mask, 'Min Limit ATE'] = min_limit
-        df_combined.loc[mask, 'Max Limit ATE'] = max_limit
-
-        # Determine if the results are within limits and update the 'Verdict ATE' column
-        def verdict(result):
-            if pd.notna(result):
-                if min_limit <= result <= max_limit:
-                    return 1  # Passed
-                else:
-                    return 0  # Failed
-            return None  # If result is NaN
-
-        df_combined.loc[mask, 'Verdict ATE'] = df_combined.loc[mask, 'Result'].apply(verdict)
-
-        # Update global verdict based on the results
-        if (df_combined.loc[mask, 'Verdict ATE'] == 0).any():
-            global_verdict = 0  # If any result is 0, set global verdict to 0
+        if excluded_errors or range_errors:
+            full_report.append({
+                "test": param,
+                "status": "FAILED",
+                "excluded_index_errors": [{"index": i, "value": v} for i, v in excluded_errors],
+                "range_errors": [{"index": i, "value": v} for i, v in range_errors],
+                "total_checked": len(included_values),
+                "total_failed": len(excluded_errors) + len(range_errors)
+            })
         else:
-            global_verdict = 1  # Otherwise, set global verdict to 1
+            full_report.append({
+                "test": param,
+                "status": "PASSED",
+                "total_checked": len(included_values),
+                "total_failed": 0
+            })
 
-        print(f"Data updated for test '{test_name}':")
-        print(df_combined[mask])
-        print(f"Global Verdict: {global_verdict}")
-    else:
-        print(f"No data found for test '{test_name}'.")
-
-    return df_combined, global_verdict
+    return full_report
 
 
-gmmt = [1.2, 3.4, 2.2]
-gmmr = [1.5, 2.3, 4.5]
-snr_ave = [1.5]
-add_new_data('GMMt', gmmt, tx=True)
-add_new_data('GMMr', gmmr, rx=True)
-add_new_data("SNR_Average", snr_ave)
 
-print(df_combined)
-global_verdict = 1
 
-# Example usage
-df_combined, global_verdict = filter_and_update_data(df_combined, global_verdict, 'GMMt', 1.0, 3.0)  # Min and max limits for GMMt
-print(global_verdict)
-df_combined, global_verdict = filter_and_update_data(df_combined, global_verdict, 'GMMr', 1.0, 4.0)  # Min and max limits for GMMr
-print(global_verdict)
-df_combined, global_verdict = filter_and_update_data(df_combined, global_verdict, 'SNR_Average', 1.0, 4.0)  # Min and max limits for GMMr
+report = full_json_validation(
+    system_type='bsr32',
+    json_file_path=r'C:\Users\drory\Downloads\cal_32_76128_prod_mrr_Jacob_Dror_debug_1.json'
+)
 
-print(df_combined)
-print(global_verdict)
-pass
+import json
+print(json.dumps(report, indent=2))
+

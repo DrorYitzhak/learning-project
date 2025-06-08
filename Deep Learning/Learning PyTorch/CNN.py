@@ -15,6 +15,7 @@ import time
 
 # Convert MNIST Image Files into a Tensor of 4-Dimensions (# of images, Height, Width, Color Channels)
 transform = transforms.ToTensor()
+
 # transform = transforms.Compose[transforms.ToTensor(), transforms.Normalize(0.5, 0.24)]
 
 # Train Data
