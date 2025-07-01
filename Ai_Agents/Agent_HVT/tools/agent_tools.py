@@ -69,7 +69,6 @@ class DataLoaderTool(BaseTool):
         else:
             return "❌ פורמט לא נתמך. יש לספק קובץ CSV או ZIP."
 
-
 # 🔧 כלי 2 – סיכום כשלונות לפי DUT_SN
 class FailureCountPerUnitTool(BaseTool):
     name: ClassVar[str] = "failure_count_per_unit_tool"
@@ -90,10 +89,6 @@ class FailureCountPerUnitTool(BaseTool):
             return "✅ לא נמצאו כשלונות."
 
         return f"📊 סיכום כשלונות לפי DUT_SN:\n\n{failed_counts.to_string(index=False)}"
-
-    async def _arun(self, query: str) -> str:
-        raise NotImplementedError("Async לא נתמך.")
-
 
 # 🔧 כלי 3 – קובץ על שדות שנכשלו
 class FailureQueryTool(BaseTool):
@@ -118,7 +113,6 @@ class FailureQueryTool(BaseTool):
 
         preview = failed_df[requested_cols].head(10).to_string(index=False)
         return f"📋 שורות שנכשלו ( ראשונות ):\n\n{preview}"
-
 
 # 🔧 כלי 4 – סיכום כשלים
 class FailureSummaryTool(BaseTool):
@@ -151,56 +145,56 @@ class FailureSummaryTool(BaseTool):
 
         return f"נמצאו {len(failed_df)} שורות שנכשלו:\n\n" + "\n".join(summaries)
 
+# 🔧 כלי בסיס לגרפים
+class BaseChartTool(BaseTool):
+    name: ClassVar[str] = "chart_base_tool"
+    description: ClassVar[str] = "Generates a chart and returns a matplotlib Figure object."
 
-# 🔧 כלי 5 – גרף פארטו לפי Sys_Type + תדר + Test_Name
-class FailureParetoTool(BaseTool):
-    name: ClassVar[str] = "failure_pareto_tool"
-    description: ClassVar[str] = "מציג גרף פארטו של כמות כשלים לפי שילוב Sys_Type, LOM_Freq_Config_MHz ו-Test_Name."
+    def _generate_chart(self, query: str) -> plt.Figure:
+        raise NotImplementedError("Subclasses must implement _generate_chart method.")
 
-    def _run(self, query: str) -> str:
+    def _run(self, query: str) -> dict:
+        fig = self._generate_chart(query)
+        return {"output": fig}
+
+# 🔧 גרף לדוגמה
+class DemoChartTool(BaseChartTool):
+    name: ClassVar[str] = "demo_chart_tool"
+    description: ClassVar[str] = "Creates a simple demo line chart."
+
+    def _generate_chart(self, query: str) -> plt.Figure:
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax.plot([1, 2, 3, 4], [10, 5, 8, 12], marker='o')
+        ax.set_title("Demo Chart")
+        ax.set_xlabel("X Axis")
+        ax.set_ylabel("Y Axis")
+        return fig
+
+# 🔧 גרף פארטו של כשלים לפי שם בדיקה
+class FailureParetoChartTool(BaseChartTool):
+    name: ClassVar[str] = "failure_pareto_chart_tool"
+    description: ClassVar[str] = "יוצר גרף פארטו של כשלים לפי שם הבדיקה (Test_Name)."
+
+    def _generate_chart(self, query: str) -> plt.Figure:
         df = get_loaded_data()
-        if df is None:
-            return "📬 לא נטען קובץ נתונים."
+        if df is None or "Verdict_ATE" not in df.columns or "Test_Name" not in df.columns:
+            fig, ax = plt.subplots()
+            ax.text(0.5, 0.5, "📬 Data not available or missing columns", ha='center', va='center')
+            return fig
 
-        if "Verdict_ATE" not in df.columns:
-            return "❌ העמודה 'Verdict_ATE' לא קיימת."
+        df_failed = df[df["Verdict_ATE"] == 0]
+        failures_by_test = df_failed.groupby("Test_Name").size().sort_values(ascending=False)
 
-        filtered_df = df[df["Verdict_ATE"] == 0]
-        if filtered_df.empty:
-            return "✅ אין כשלים – אין מה להציג בגרף."
-
-        for col in ["Sys_Type", "LOM_Freq_Config_MHz", "Test_Name"]:
-            if col not in filtered_df.columns:
-                return f"⚠️ העמודה '{col}' לא קיימת בקובץ."
-
-        filtered_df["Group"] = (
-            filtered_df["Sys_Type"].astype(str) + " | " +
-            filtered_df["LOM_Freq_Config_MHz"].astype(str) + " MHz | " +
-            filtered_df["Test_Name"].astype(str)
-        )
-
-        counts = filtered_df.groupby("Group").size().sort_values(ascending=False)
-        cumulative = counts.cumsum() / counts.sum() * 100
-
-        fig, ax1 = plt.subplots(figsize=(12, 6))
-        counts.plot(kind='bar', color='skyblue', ax=ax1)
-        ax1.set_ylabel("כמות כשלים")
-        ax1.set_xlabel("Sys_Type | תדר | Test_Name")
-        ax1.set_title("📊 גרף פארטו – כמות כשלים לפי שילוב פרמטרים")
-        ax1.tick_params(axis='x', rotation=90)
-
-        ax2 = ax1.twinx()
-        cumulative.plot(color='red', marker='o', ax=ax2)
-        ax2.set_ylabel("אחוז מצטבר")
-        ax2.grid(False)
-
+        fig, ax = plt.subplots(figsize=(8, 4))
+        failures_by_test.plot(kind="bar", ax=ax)
+        ax.set_title("Pareto Chart of Failures by Test")
+        ax.set_xlabel("Test Name")
+        ax.set_ylabel("Number of Failures")
+        ax.grid(True, linestyle='--', alpha=0.5)
         plt.tight_layout()
-        plt.show()
+        return fig
 
-        return "📈 גרף פארטו הוצג בהצלחה."
-
-
-# 🔧 כלי 6 – מענה כללית
+# 🔧 כלי לשאלות כלליות
 class GeneralResponseTool(BaseTool):
     name: ClassVar[str] = "general_response_tool"
     description: ClassVar[str] = "כלי לשאלות כלליות כמו 'מי אתה' או 'שלום'."
@@ -208,13 +202,13 @@ class GeneralResponseTool(BaseTool):
     def _run(self, query: str) -> str:
         return query
 
-
-# ✅ רשימת הכלים לסוכן
+# 🔧 הרשימה הכוללת של הכלים
 TOOLS = [
     DataLoaderTool(),
     FailureCountPerUnitTool(),
     FailureQueryTool(),
     FailureSummaryTool(),
-    FailureParetoTool(),
-    GeneralResponseTool()
+    FailureParetoChartTool(),
+    DemoChartTool(),
+    GeneralResponseTool(),
 ]

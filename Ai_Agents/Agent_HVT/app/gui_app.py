@@ -1,16 +1,21 @@
 import sys
 import zipfile
 import os
+import io
 import pandas as pd
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QPlainTextEdit, QPushButton, QLabel,
+    QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLabel,
     QHBoxLayout, QSizePolicy, QFileDialog, QMessageBox
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QKeyEvent, QTextOption
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl
+from PyQt5.QtGui import QFont, QKeyEvent, QTextOption, QPixmap, QTextCursor, QTextImageFormat, QImage
 
 # ✅ נוספה קריאה לסוכן בזמן טעינה
-from agent_runner import ask_agent
+
+from Ai_Agents.Agent_HVT.agent_runner import ask_agent
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 def summarize_failures(data):
     if data is None:
@@ -41,9 +46,8 @@ def summarize_failures(data):
     df_summary = pd.DataFrame(summary)
     return df_summary.to_markdown(index=False)
 
-
 class AgentThread(QThread):
-    result_ready = pyqtSignal(str)
+    result_ready = pyqtSignal(object)
     error_occurred = pyqtSignal(str)
 
     def __init__(self, question, data=None):
@@ -57,10 +61,9 @@ class AgentThread(QThread):
                 answer = summarize_failures(self.data)
             else:
                 answer = ask_agent(self.question, self.data)
-            self.result_ready.emit(str(answer))
+            self.result_ready.emit(answer)
         except Exception as e:
             self.error_occurred.emit(str(e))
-
 
 class AgentChatGUI(QWidget):
     def __init__(self):
@@ -80,7 +83,7 @@ class AgentChatGUI(QWidget):
         title.setStyleSheet("color: #ffffff; margin-bottom: 12px;")
         layout.addWidget(title)
 
-        self.chat_display = QPlainTextEdit()
+        self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)
         self.chat_display.setFont(QFont("Segoe UI", 10))
         self.chat_display.setStyleSheet("background-color: #282828; color: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid #333;")
@@ -88,7 +91,7 @@ class AgentChatGUI(QWidget):
 
         input_layout = QHBoxLayout()
 
-        self.input_field = QPlainTextEdit()
+        self.input_field = QTextEdit()
         self.input_field.setPlaceholderText("Type your question here...")
         self.input_field.setFont(QFont("Segoe UI", 10))
         self.input_field.setStyleSheet("background-color: #2d2d2d; color: white; padding: 8px; border-radius: 6px; border: 1px solid #666;")
@@ -137,22 +140,41 @@ class AgentChatGUI(QWidget):
         if not question:
             return
 
-        self.chat_display.appendPlainText(f"You: {question}\n")
+        self.chat_display.append(f"<b>You:</b> {question}<br>")
         self.status_label.setText("Thinking...")
         self.input_field.clear()
 
         self.thread = AgentThread(question, data=self.loaded_data)
-        self.thread.result_ready.connect(self.display_answer)
+        self.thread.result_ready.connect(self.display_agent_response)
         self.thread.error_occurred.connect(self.display_error)
         self.thread.start()
 
-    def display_answer(self, answer):
-        self.chat_display.appendPlainText(f"Agent: {answer}\n")
+    def display_agent_response(self, result):
+        if isinstance(result, Figure):
+            self.insert_chart_into_chat(result)
+        else:
+            self.chat_display.append(f"<b>Agent:</b> {result}<br>")
         self.status_label.setText("Ready")
 
     def display_error(self, error):
-        self.chat_display.appendPlainText(f"⚠️ Error: {error}\n")
+        self.chat_display.append(f"<b>⚠️ Error:</b> {error}<br>")
         self.status_label.setText("Ready")
+
+    def insert_chart_into_chat(self, fig):
+        canvas = FigureCanvas(fig)
+        buffer = io.BytesIO()
+        canvas.print_png(buffer)
+        buffer.seek(0)
+
+        image = QImage()
+        image.loadFromData(buffer.read(), format='PNG')
+
+        cursor = self.chat_display.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.chat_display.append("<b>Agent:</b> מציג גרף:<br>")
+        cursor.insertImage(image)
+        self.chat_display.setTextCursor(cursor)
+        self.chat_display.ensureCursorVisible()
 
     def load_data_dialog(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select ZIP or CSV File", "", "ZIP or CSV Files (*.zip *.csv)")
@@ -162,12 +184,11 @@ class AgentChatGUI(QWidget):
             return
 
         try:
-            # שולח בקשת טעינה לסוכן
-            self.chat_display.appendPlainText(f"You: טען את הקובץ {path}\n")
+            self.chat_display.append(f"<b>You:</b> טען את הקובץ {path}<br>")
             self.status_label.setText("Loading...")
 
             answer = ask_agent(f"טען את הקובץ {path}")
-            self.chat_display.appendPlainText(f"Agent: {answer}\n")
+            self.chat_display.append(f"<b>Agent:</b> {answer}<br>")
             self.status_label.setText("Ready")
 
         except Exception as e:
@@ -179,7 +200,6 @@ class AgentChatGUI(QWidget):
                 self.handle_query()
                 return True
         return super().eventFilter(source, event)
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
