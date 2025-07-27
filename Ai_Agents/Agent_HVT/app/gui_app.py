@@ -5,7 +5,7 @@ import io
 import pandas as pd
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLabel,
-    QHBoxLayout, QSizePolicy, QFileDialog, QMessageBox
+    QHBoxLayout, QSizePolicy, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl
 from PyQt5.QtGui import QFont, QKeyEvent, QTextOption, QPixmap, QTextCursor, QTextImageFormat, QImage
@@ -44,7 +44,8 @@ def summarize_failures(data):
         return "No failures found in the dataset."
 
     df_summary = pd.DataFrame(summary)
-    return df_summary.to_markdown(index=False)
+    return df_summary   # <------ כאן לשים במקום return df_summary.to_markdown(index=False)
+
 
 class AgentThread(QThread):
     result_ready = pyqtSignal(object)
@@ -88,6 +89,11 @@ class AgentChatGUI(QWidget):
         self.chat_display.setFont(QFont("Segoe UI", 10))
         self.chat_display.setStyleSheet("background-color: #282828; color: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid #333;")
         layout.addWidget(self.chat_display)
+
+        self.table_widget = QTableWidget()
+        self.table_widget.setStyleSheet("background-color: #282828; color: #ffffff; border-radius: 8px; border: 1px solid #333;")
+        self.table_widget.setVisible(False)
+        layout.addWidget(self.table_widget)
 
         input_layout = QHBoxLayout()
 
@@ -150,11 +156,32 @@ class AgentChatGUI(QWidget):
         self.thread.start()
 
     def display_agent_response(self, result):
-        if isinstance(result, Figure):
+        # First, always hide the table
+        self.table_widget.setVisible(False)
+        # Try: if the answer is a pandas DataFrame, show as table
+        if isinstance(result, pd.DataFrame):
+            self.show_table(result)
+        elif isinstance(result, list) and all(isinstance(row, dict) for row in result):
+            # if result is a list of dicts (typical for preview rows) - show as table
+            df = pd.DataFrame(result)
+            self.show_table(df)
+        elif isinstance(result, Figure):
             self.insert_chart_into_chat(result)
         else:
             self.chat_display.append(f"<b>Agent:</b> {result}<br>")
         self.status_label.setText("Ready")
+
+    def show_table(self, df):
+        self.table_widget.setVisible(True)
+        self.table_widget.setRowCount(len(df))
+        self.table_widget.setColumnCount(len(df.columns))
+        self.table_widget.setHorizontalHeaderLabels(df.columns.astype(str))
+        for i, row in df.iterrows():
+            for j, col in enumerate(df.columns):
+                item = QTableWidgetItem(str(row[col]))
+                self.table_widget.setItem(i, j, item)
+        self.table_widget.resizeColumnsToContents()
+        self.table_widget.resizeRowsToContents()
 
     def display_error(self, error):
         self.chat_display.append(f"<b>⚠️ Error:</b> {error}<br>")

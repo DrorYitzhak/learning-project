@@ -13,9 +13,12 @@ llm = get_llm()
 memory = get_memory()
 
 def ask_agent(prompt: str, system_prompt: str = None):
-    """Receives a textual question and returns the agent's response (either text or a matplotlib Figure)."""
+    """
+    Receives a textual question and returns the agent's response
+    (either text, a pandas DataFrame, or a matplotlib Figure).
+    """
     try:
-        # Choose appropriate prompt
+        # Choose the correct prompt
         prompt_template = full_combined_prompt if system_prompt is None else PromptTemplate.from_template(system_prompt)
 
         # Create the agent with intermediate steps enabled
@@ -34,23 +37,33 @@ def ask_agent(prompt: str, system_prompt: str = None):
         # Invoke the agent
         result = agent_executor.invoke({"input": prompt})
 
-        # Step 1: Check if intermediate steps returned a Figure
+        # First: Check for Figure in intermediate steps
         for action_log, observation in result.get("intermediate_steps", []):
+            # If returned dict with DataFrame or Figure
             if isinstance(observation, dict):
+                # Return matplotlib Figure if present
                 fig = observation.get("output")
                 if isinstance(fig, matplotlib.figure.Figure):
                     return fig
+                # Return DataFrame (for table preview)
+                df = observation.get("data")
+                if hasattr(df, 'head') and hasattr(df, 'columns'):
+                    return df.head(5)  # show preview
 
-        # Step 2: The result itself might contain Figure (older behavior)
+        # Second: Check if output itself is Figure or DataFrame
         output = result.get("output", None)
         if isinstance(output, Figure):
             return output
+        if hasattr(output, 'head') and hasattr(output, 'columns'):
+            return output.head(5)
 
-        for val in result.values():
-            if isinstance(val, Figure):
-                return val
+        # Sometimes agent returns a list of dicts as preview rows
+        if isinstance(output, list) and all(isinstance(row, dict) for row in output):
+            import pandas as pd
+            df = pd.DataFrame(output)
+            return df.head(5)
 
-        # Otherwise, return text
+        # Otherwise, return the string/text output
         return output or "No response."
 
     except Exception as e:
