@@ -8,6 +8,12 @@ import uuid
 import logging
 import json
 
+
+# 🔧 כלי חדש: סמול-טוק מבוסס LLM
+from Ai_Agents.Agent_HVT.llm.llm_model import get_llm
+from langchain_core.tools import BaseTool
+from typing import ClassVar
+
 # הגדרת לוג בסיסי
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -289,6 +295,41 @@ class GeneralResponseTool(BaseTool):
     def _run(self, query: str) -> str:
         return query
 
+
+class SmallTalkLLMTool(BaseTool):
+    name: ClassVar[str] = "small_talk_llm"
+    description: ClassVar[str] = (
+        "Answer casual, open-ended, and small-talk questions using a general LLM. "
+        "This tool is only for greetings, ice-breakers, jokes, small talk, and friendly communication unrelated to HVT data."
+    )
+    def _run(self, query: str, chat_history=None) -> str:
+        llm = get_llm()
+        # אם אין היסטוריה פשוט הגדר כ-ריק
+        if chat_history is None:
+            chat_history = ""
+        prompt = (
+            "Always reply in the same language as the user's message. "
+            "If there is no previous conversation, or this is the first message, "
+            "introduce yourself briefly as an assistant for radar test data analysis. "
+            "When introducing yourself in the first message, do not ask for files or data, just say you are the radar test data analysis assistant and the user is welcome to ask or upload anything. "
+            "Do not expand or explain more than that. "
+            "If there is previous conversation, always take into account the chat history "
+            "and reply concisely and contextually – answer based on the ongoing conversation. "
+            "If the user's message is unrelated to radar test data, CSV files, or analysis, "
+            "gently encourage them to ask about radar data or test results. "
+            "Do not give long or off-topic answers. "
+            "If the user is confused, help them get started by explaining that you assist with radar test data. "
+            "Be polite and positive. "
+            "\n\nPrevious conversation: {chat_history}\n"
+            "User: {query}\n"
+            "AI:"
+        )
+
+        response = llm.invoke(prompt)
+        return response
+
+
+
 # 🔧 הרשימה הכוללת של הכלים
 TOOLS = [
     DataLoaderTool(),
@@ -299,4 +340,5 @@ TOOLS = [
     FailureParetoChartTool(),
     DemoChartTool(),
     GeneralResponseTool(),
+    SmallTalkLLMTool(),  # <---- הוספת הכלי החדש
 ]

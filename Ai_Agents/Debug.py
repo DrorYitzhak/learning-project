@@ -1,50 +1,52 @@
+import streamlit as st
 import pandas as pd
-import os
-from llm.llm_model import get_llm
+import plotly.express as px
+from Ai_Agents.Agent_HVT.agent_runner import ask_agent
 
-def ask_smart_question(df: pd.DataFrame, question: str) -> str:
-    """
-    מקבל DataFrame ושאלה, ובונה קונטקסט חכם כדי לשאול את המודל ולהחזיר תשובה טקסטואלית.
-    """
-    df_head = df.head(15).to_string(index=False)
-    columns = df.columns.tolist()
-    types = df.dtypes.astype(str).to_dict()
-    stats = df.describe().to_string()
+# כותרת ראשית
+st.set_page_config(page_title="Agent - HVT Data", layout="wide")
+st.title("🤖 Agent - HVT Data Analysis")
 
-    prompt = f"""
-    אתה עוזר חכם שמנתח טבלאות בדיקות ייצור.
-    טבלה לדוגמה (15 שורות ראשונות):
-    {df_head}
+# משתנים גלובליים
+if 'data' not in st.session_state:
+    st.session_state['data'] = None
 
-    שמות העמודות:
-    {columns}
+# אזור העלאת קובץ
+st.sidebar.header("📂 העלאת קובץ")
+uploaded_file = st.sidebar.file_uploader("בחר קובץ ZIP או CSV", type=["zip", "csv"])
 
-    סוגי העמודות:
-    {types}
+if uploaded_file is not None:
+    st.write(f"**קובץ נטען:** {uploaded_file.name}")
+    # שמור או טפל בקובץ
+    ask_agent(f"טען את הקובץ {uploaded_file.name}")
+    st.success("✅ הקובץ נטען בהצלחה")
 
-    סטטיסטיקה כללית:
-    {stats}
+# שדה קלט לשאלה
+st.subheader("שאל את הסוכן")
+user_question = st.text_input("הקלד שאלה:")
 
-    כעת ענה בצורה מקצועית, מדויקת וברורה על השאלה הבאה:
-    {question}
-    """
+if st.button("שלח שאלה"):
+    if not user_question.strip():
+        st.warning("❗ כתוב שאלה לפני שליחה")
+    else:
+        st.write(f"**אתה:** {user_question}")
+        with st.spinner("הסוכן חושב..."):
+            answer = ask_agent(user_question, st.session_state['data'])
+        st.success("תשובת הסוכן:")
 
-    return get_llm().invoke(prompt)
+        # אם התשובה DataFrame - נציג טבלה
+        if isinstance(answer, pd.DataFrame):
+            st.dataframe(answer)
 
-if __name__ == "__main__":
-    # מחשב נתיב מוחלט אל קובץ ה-CSV מתוך תיקיית Agent_HVT/data
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(script_dir, "Agent_HVT", "data", "HVT_Production_Results_4432102105000898_2025-05-11--19-09-55.csv")
+            # תן אופציה להציג גרף אם יש עמודות מתאימות
+            numeric_cols = answer.select_dtypes(include=['number']).columns.tolist()
+            if len(numeric_cols) >= 1:
+                st.subheader("📊 גרף אינטראקטיבי")
+                x_axis = st.selectbox("בחר עמודה ל-X", answer.columns)
+                y_axis = st.selectbox("בחר עמודה ל-Y", numeric_cols)
+                fig = px.scatter(answer, x=x_axis, y=y_axis, color=x_axis, title="גרף אינטראקטיבי")
+                st.plotly_chart(fig, use_container_width=True)
 
-    # טען את הקובץ
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"הקובץ לא נמצא בנתיב: {csv_path}")
-
-    df = pd.read_csv(csv_path)
-
-    # שאלת דוגמה (אפשר להחליף)
-    question = "באיזה מבחנים יש נפילות ומה ערך הנפילה ?"
-    answer = ask_smart_question(df, question)
-
-    print("\n🔎 תשובת המנוע החכם:")
-    print(answer)
+        # אם התשובה טקסט - נציג כטקסט
+        else:
+            st.write(answer)
