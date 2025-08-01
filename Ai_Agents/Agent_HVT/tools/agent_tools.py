@@ -268,6 +268,7 @@ class DemoChartTool(BaseChartTool):
         ax.set_ylabel("Y Axis")
         return fig
 
+
 # 🔧 גרף פארטו של כשלים לפי שם בדיקה (ללא שינוי)
 # class FailureParetoChartTool(BaseChartTool):
 #     name: ClassVar[str] = "failure_pareto_chart_tool"
