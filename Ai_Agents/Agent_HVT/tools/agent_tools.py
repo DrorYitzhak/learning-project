@@ -302,10 +302,14 @@ class SmallTalkLLMTool(BaseTool):
         "Answer casual, open-ended, and small-talk questions using a general LLM. "
         "This tool is only for greetings, ice-breakers, jokes, small talk, and friendly communication unrelated to HVT data."
     )
-    def _run(self, query: str, chat_history=None) -> str:
+    def _run(self, action_input, **kwargs) -> str:
         llm = get_llm()
-        # אם אין היסטוריה פשוט הגדר כ-ריק
-        if chat_history is None:
+        # תומך בכניסות מגוונות (dict או str)
+        if isinstance(action_input, dict):
+            query = action_input.get("query", "")
+            chat_history = action_input.get("chat_history", "")
+        else:
+            query = action_input
             chat_history = ""
         prompt = (
             "Always reply in the same language as the user's message. "
@@ -324,9 +328,11 @@ class SmallTalkLLMTool(BaseTool):
             "User: {query}\n"
             "AI:"
         )
-
-        response = llm.invoke(prompt)
+        full_prompt = prompt.format(chat_history=chat_history, query=query)
+        # print("--- PROMPT TO LLM ---\n", full_prompt)
+        response = llm.invoke(full_prompt)
         return response
+
 
 
 
