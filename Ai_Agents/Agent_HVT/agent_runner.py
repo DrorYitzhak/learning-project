@@ -7,6 +7,8 @@ from langchain.agents import AgentExecutor
 from langchain.prompts import PromptTemplate
 from matplotlib.figure import Figure
 import matplotlib
+import plotly.graph_objs as go
+import pandas as pd
 
 # Load base components
 llm = get_llm()
@@ -41,30 +43,24 @@ def ask_agent(prompt: str, system_prompt: str = None):
         for action_log, observation in result.get("intermediate_steps", []):
             # If returned dict with DataFrame or Figure
             if isinstance(observation, dict):
-                # Return matplotlib Figure if present
-                fig = observation.get("output")
-                if isinstance(fig, matplotlib.figure.Figure):
-                    return fig
-                # Return DataFrame (for table preview)
-                df = observation.get("data")
-                if hasattr(df, 'head') and hasattr(df, 'columns'):
-                    return df.head(5)  # show preview
+                out = observation.get("output")
+                if isinstance(out, (matplotlib.figure.Figure, go.Figure)):
+                    return out
+                # Figure בתוך dict["output"]["output"] (מקונן פעמיים)
+                if isinstance(out, dict) and "output" in out and isinstance(out["output"], (matplotlib.figure.Figure, go.Figure)):
+                    return out["output"]
 
         # Second: Check if output itself is Figure or DataFrame
         output = result.get("output", None)
-        if isinstance(output, Figure):
+        if isinstance(output, (matplotlib.figure.Figure, go.Figure)):
             return output
-        if hasattr(output, 'head') and hasattr(output, 'columns'):
-            return output.head(5)
-
-        # Sometimes agent returns a list of dicts as preview rows
-        if isinstance(output, list) and all(isinstance(row, dict) for row in output):
-            import pandas as pd
-            df = pd.DataFrame(output)
-            return df.head(5)
+        if isinstance(output, dict) and "output" in output and isinstance(output["output"], (matplotlib.figure.Figure, go.Figure)):
+            return output["output"]
 
         # Otherwise, return the string/text output
         return output or "No response."
 
     except Exception as e:
         return f"❌ Error: {str(e)}"
+
+

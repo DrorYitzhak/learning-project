@@ -2,6 +2,7 @@ import os
 import zipfile
 import pandas as pd
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from langchain_core.tools import BaseTool
 from typing import ClassVar
 import uuid
@@ -268,27 +269,69 @@ class DemoChartTool(BaseChartTool):
         return fig
 
 # 🔧 גרף פארטו של כשלים לפי שם בדיקה (ללא שינוי)
-class FailureParetoChartTool(BaseChartTool):
-    name: ClassVar[str] = "failure_pareto_chart_tool"
-    description: ClassVar[str] = "יוצר גרף פארטו של כשלים לפי שם הבדיקה (Test_Name)."
-    def _generate_chart(self, query: str) -> plt.Figure:
-        df = get_loaded_data()
-        if df is None or "Verdict_ATE" not in df.columns or "Test_Name" not in df.columns:
-            fig, ax = plt.subplots()
-            ax.text(0.5, 0.5, "📬 Data not available or missing columns", ha='center', va='center')
-            return fig
-        df_failed = df[df["Verdict_ATE"] == 0]
-        failures_by_test = df_failed.groupby("Test_Name").size().sort_values(ascending=False)
-        fig, ax = plt.subplots(figsize=(8, 4))
-        failures_by_test.plot(kind="bar", ax=ax)
-        ax.set_title("Pareto Chart of Failures by Test")
-        ax.set_xlabel("Test Name")
-        ax.set_ylabel("Number of Failures")
-        ax.grid(True, linestyle='--', alpha=0.5)
-        plt.tight_layout()
-        return fig
+# class FailureParetoChartTool(BaseChartTool):
+#     name: ClassVar[str] = "failure_pareto_chart_tool"
+#     description: ClassVar[str] = "יוצר גרף פארטו של כשלים לפי שם הבדיקה (Test_Name)."
+#     def _generate_chart(self, query: str) -> plt.Figure:
+#         df = get_loaded_data()
+#         if df is None or "Verdict_ATE" not in df.columns or "Test_Name" not in df.columns:
+#             fig, ax = plt.subplots()
+#             ax.text(0.5, 0.5, "📬 Data not available or missing columns", ha='center', va='center')
+#             return fig
+#         df_failed = df[df["Verdict_ATE"] == 0]
+#         failures_by_test = df_failed.groupby("Test_Name").size().sort_values(ascending=False)
+#         fig, ax = plt.subplots(figsize=(8, 4))
+#         failures_by_test.plot(kind="bar", ax=ax)
+#         ax.set_title("Pareto Chart of Failures by Test")
+#         ax.set_xlabel("Test Name")
+#         ax.set_ylabel("Number of Failures")
+#         ax.grid(True, linestyle='--', alpha=0.5)
+#         plt.tight_layout()
+#         return fig
 
 # 🔧 כלי לשאלות כלליות (ללא שינוי)
+class FailureParetoChartTool(BaseChartTool):
+    name: ClassVar[str] = "failure_pareto_chart_plotly_tool"
+    description: ClassVar[str] = "יוצר גרף פארטו של כשלים לפי שם הבדיקה (Test_Name), ב-Plotly."
+
+    def _generate_chart(self, query: str):
+        df = get_loaded_data()
+        if df is None or "Verdict_ATE" not in df.columns or "Test_Name" not in df.columns:
+            fig = go.Figure()
+            fig.add_annotation(
+                text="📬 Data not available or missing columns",
+                xref="paper", yref="paper", showarrow=False,
+                font=dict(size=18, color="gray"), x=0.5, y=0.5
+            )
+            fig.update_layout(height=300)
+            return fig  # <--- כאן!
+
+        df_failed = df[df["Verdict_ATE"] == 0]
+        failures_by_test = df_failed.groupby("Test_Name").size().sort_values(ascending=False)
+
+        fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=failures_by_test.index,
+                    y=failures_by_test.values,
+                    text=failures_by_test.values,
+                    textposition="auto"
+                )
+            ]
+        )
+
+        fig.update_layout(
+            title="Pareto Chart of Failures by Test",
+            xaxis_title="Test Name",
+            yaxis_title="Number of Failures",
+            xaxis_tickangle=-35,
+            template="plotly_white",
+            height=400,
+            margin=dict(l=60, r=30, t=60, b=120)
+        )
+
+        return fig  # <--- גם כאן!
+
 class GeneralResponseTool(BaseTool):
     name: ClassVar[str] = "general_response_tool"
     description: ClassVar[str] = "כלי לשאלות כלליות כמו 'מי אתה' או 'שלום'."
@@ -302,10 +345,14 @@ class SmallTalkLLMTool(BaseTool):
         "Answer casual, open-ended, and small-talk questions using a general LLM. "
         "This tool is only for greetings, ice-breakers, jokes, small talk, and friendly communication unrelated to HVT data."
     )
-    def _run(self, query: str, chat_history=None) -> str:
+    def _run(self, action_input, **kwargs) -> str:
         llm = get_llm()
-        # אם אין היסטוריה פשוט הגדר כ-ריק
-        if chat_history is None:
+        # תומך בכניסות מגוונות (dict או str)
+        if isinstance(action_input, dict):
+            query = action_input.get("query", "")
+            chat_history = action_input.get("chat_history", "")
+        else:
+            query = action_input
             chat_history = ""
         prompt = (
             "Always reply in the same language as the user's message. "
@@ -324,10 +371,10 @@ class SmallTalkLLMTool(BaseTool):
             "User: {query}\n"
             "AI:"
         )
-
-        response = llm.invoke(prompt)
+        full_prompt = prompt.format(chat_history=chat_history, query=query)
+        # print("--- PROMPT TO LLM ---\n", full_prompt)
+        response = llm.invoke(full_prompt)
         return response
-
 
 
 # 🔧 הרשימה הכוללת של הכלים
